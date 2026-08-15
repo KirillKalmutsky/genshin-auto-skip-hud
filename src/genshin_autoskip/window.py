@@ -25,8 +25,10 @@ _user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 _user32.GetWindowTextW.restype = ctypes.c_int
 _user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
 _user32.FindWindowW.restype = wintypes.HWND
-_user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
-_user32.GetWindowRect.restype = wintypes.BOOL
+_user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+_user32.GetClientRect.restype = wintypes.BOOL
+_user32.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+_user32.ClientToScreen.restype = wintypes.BOOL
 _user32.GetSystemMetrics.argtypes = [ctypes.c_int]
 _user32.GetSystemMetrics.restype = ctypes.c_int
 
@@ -82,18 +84,30 @@ def find_game() -> int:
 
 
 def game_rect() -> Optional[tuple[int, int, int, int]]:
-    """(left, top, width, height) of the game window, or None if not found."""
+    """(left, top, width, height) of the game's *client* area, or None.
+
+    The client area, not the window: every on-screen position was measured
+    against what the game draws, and a bordered window adds a caption and a
+    frame on top of that - about 38 px vertically here. Detection tolerates
+    roughly 4 px of misalignment, so using the window rectangle put the regions
+    far enough out that windowed mode never detected anything, while borderless
+    happened to work because there the two rectangles coincide.
+    """
     hwnd = find_game()
     if not hwnd:
         return None
     rect = wintypes.RECT()
-    if not _user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+    if not _user32.GetClientRect(hwnd, ctypes.byref(rect)):
         return None
     width = rect.right - rect.left
     height = rect.bottom - rect.top
     if width <= 0 or height <= 0:
         return None
-    return rect.left, rect.top, width, height
+
+    origin = wintypes.POINT(rect.left, rect.top)
+    if not _user32.ClientToScreen(hwnd, ctypes.byref(origin)):
+        return None
+    return origin.x, origin.y, width, height
 
 
 def primary_screen_size() -> tuple[int, int]:
