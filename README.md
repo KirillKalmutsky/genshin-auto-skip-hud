@@ -71,100 +71,45 @@ and a shorter hold risks falling between two samples.
 
 ## How it works
 
-Everything below was measured against real captured frames rather than reasoned
-about, because most of the obvious approaches turned out not to survive contact
-with the game.
-
 ### Input
 
-Keys go out through `SendInput` with hardware scan codes, held 60 ms. This is
-not a stylistic choice — it was measured against the live game:
+Keys go out through `SendInput` with hardware scan codes, held long enough to
+span one of the game's input polls.
 
-```
-pyautogui.press('f')          no effect
-pyautogui keyDown/Up 60ms     no effect
-SendInput virtual-key 60ms    advanced the dialogue
-SendInput SCANCODE  60ms      advanced the dialogue
-```
-
-`pyautogui` drives the keyboard through the legacy `keybd_event` call, which the
-game ignores entirely — holding the key longer does not help. Scan codes are
-preferred over virtual key codes because they address a physical key and so
+This is not a stylistic choice. `pyautogui` and similar libraries drive the
+keyboard through the legacy `keybd_event` call, and the game ignores those
+events entirely — holding the key longer does not help either. Scan codes are
+preferred over virtual key codes because they address a physical key, so they
 survive a non-Latin keyboard layout.
 
 ### Detection
 
-The anchor is the auto-play button in the top-left corner. It is hard to
-describe and easy to recognise, which is the whole difficulty: it appears as a
-play triangle or as pause bars, lit or translucent, and while translucent it
-blends with whatever scenery is behind it.
+The tool watches the auto-play button in the top-left corner, which the game
+draws whenever a dialogue is on screen.
 
-Describing it by properties — bright, round, hollow, this size, this colour —
-fails, because every such description also fits something else the game draws:
-the quest journal's category icon, the back arrow in full-screen menus, the
-Paimon menu button, markers on the minimap. Tightening the description to
-exclude those excluded the real button too.
+The button is awkward to recognise: it shows a play triangle or pause bars, and
+it can be lit or half-transparent — and while it is transparent, the scenery
+behind it shows through and changes how it looks. Describing it by appearance
+does not work, because "a bright round icon" also matches the quest journal
+icon, the back arrow in menus, and the Paimon button.
 
-What works is algebra. The button is two layers composited over the scene, a
-light disc with a dark glyph on it, so for a pixel of each:
+So instead of describing it, the tool subtracts the background. The button is a
+light disc with a dark glyph on it, and the difference between the two depends
+only on how transparent the button is — not on what is behind it. Scaling that
+difference to a fixed range removes the transparency as well, leaving the plain
+shape of the glyph, which is then compared against two reference images: one
+triangle, one pair of bars.
 
-```
-disc  : I_d = a·F_d + (1−a)·B
-glyph : I_g = a·F_g + (1−a)·B
-─────────────────────────────
-        I_d − I_g = a·(F_d − F_g)
-```
+That same difference also says how faded the button is, which is how the tool
+knows the game is waiting for you to pick an answer.
 
-The scene cancels exactly. Dividing that difference by its own peak cancels the
-opacity as well, leaving the bare shape — which is then correlated against two
-references, one per glyph. The disc level is estimated locally by morphological
-closing with a kernel wider than the glyph's strokes.
+Regions are anchored to the game window rather than to the screen, and scale
+with its height, so other resolutions and ultrawide displays work without
+per-resolution tables.
 
-Two things fall out of the same equation for free: the difference before
-normalisation is proportional to opacity, so it doubles as a presence check
-(40–163 with the button on screen, 2–22 without), and as a hint that the game
-has faded the button because it is waiting for an answer.
-
-Measured over 145 real frames covering all four appearances, the quest journal
-and frames with no dialogue — **145/145 correct**:
-
-| Frames | Confidence |
-| --- | --- |
-| dialogue, auto-play off | 0.897 – 0.926 |
-| dialogue, auto-play on | fires on all |
-| dialogue, choice waiting | 0.988 – 0.996 |
-| quest journal open | 0.475 |
-| no dialogue | 0.476 – 0.485 |
-
-with the threshold at 0.63.
-
-Approaches that were measured and rejected along the way: exact RGB comparison
-(the original, breaks on any UI change), blob heuristics, a single whole-button
-template (gap −0.240), masked correlation (−0.002), Canny edge matching (−0.111)
-and pixel-level shape overlap (+0.018). Sampling eleven appearance templates did
-work (+0.161) before the recovery approach replaced it with two (+0.291).
-
-### Geometry
-
-Regions are anchored to the game window rather than the primary monitor, and
-scale with window **height** — Genshin scales its HUD uniformly and anchors it
-to the screen edges, so on an ultrawide display the button stays the same size
-and the same distance from the left edge. Scaling by width, as the original
-code did, pushes the region far to the right of the button.
-
-### Cost
-
-While a dialogue is running the loop sleeps until the next press is actually
-due rather than polling through the wait:
-
-```
-screen reads      12.8/s
-reads per press   2.2
-key presses       unchanged
-```
-
-`IDLE_POLL_MS` governs the only remaining poll — the delay before a new dialogue
-is noticed.
+While a dialogue is running the loop sleeps until the next press is due instead
+of polling continuously, so it barely touches the CPU. `IDLE_POLL_MS` sets the
+only remaining poll — how quickly a new dialogue is noticed.
 
 ## Why administrator
 
