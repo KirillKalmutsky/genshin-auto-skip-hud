@@ -295,10 +295,14 @@ class Overlay:
         return f"mode      {anchor}\nanswers   {answers}"
 
     def _keys_line(self) -> str:
+        """Each key is labelled with what it controls, not with its next value.
+
+        "F10 manual" read as a status while every other entry read as an
+        action, and the current setting is already on the line above.
+        """
         first = "F8 stop" if self.state.running else "F8 start"
-        answers = "F10 manual" if self.state.auto_answer else "F10 auto"
         # Two deliberate lines rather than one that wraps wherever it lands.
-        return f"{first}   F9 mode   {answers}\nF11 hide   F12 quit"
+        return f"{first}   F9 mode   F10 answers\nF11 hide   F12 quit"
 
     # -- refresh -----------------------------------------------------------
 
