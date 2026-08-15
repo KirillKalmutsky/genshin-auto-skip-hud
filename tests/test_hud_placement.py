@@ -13,7 +13,7 @@ from genshin_autoskip.config import HUD_POSITIONS, Config
 
 def test_top_left_is_not_offered() -> None:
     assert "top-left" not in HUD_POSITIONS
-    assert "bottom-left" in HUD_POSITIONS
+    assert "top-right" in HUD_POSITIONS
 
 
 def test_default_is_a_safe_corner() -> None:
@@ -37,4 +37,4 @@ def test_every_offered_corner_survives_a_round_trip(corner: str,
 def test_nonsense_falls_back(tmp_path: Path) -> None:
     path = tmp_path / ".env"
     path.write_text("HUD_POSITION=middle-of-nowhere\n", encoding="utf-8")
-    assert Config.load(path).hud_position == "bottom-left"
+    assert Config.load(path).hud_position == HUD_POSITIONS[0]

@@ -52,7 +52,7 @@ set "CODE=!errorlevel!"
 echo.
 if "!CODE!"=="0" (
     echo ============================================
-    echo   Done - GenshinAutoSkip.exe is in this folder
+    echo   Done - GenshinAutoSkipHUD.exe is in this folder
     echo ============================================
 ) else (
     echo [ERROR] Build failed with code !CODE!

@@ -50,10 +50,10 @@ TEXT = "#eef3fb"
 DIM = "#93a3be"
 FAINT = "#6b7c99"
 
-GO = "#3ddc84"
-WORK = "#4cc2ff"
-HOLD = "#ffb020"
-YOU = "#ff5c7a"
+GO = "#3ddc84"      # working
+HOLD = "#ffb020"    # waiting on something - focus, or the game being open
+WORK = "#4cc2ff"    # your move
+STOP = "#ff5c7a"    # not running at all
 
 WIDTH = 330
 RAIL = 4
@@ -66,8 +66,8 @@ UTILITY = ("Cascadia Mono", 9)
 
 #: Anchor names as the tray menu words them, so panel and menu agree.
 ANCHOR_LABELS = {
-    "auto": "auto-play",
-    "marker": "marker",
+    "auto": "auto-play button",
+    "marker": "orange marker",
     "both": "either",
 }
 
@@ -86,7 +86,7 @@ def _shorten(title: str, limit: int = 26) -> str:
 
 
 class Overlay:
-    def __init__(self, state: SkipperState, position: str = "bottom-left",
+    def __init__(self, state: SkipperState, position: str = "top-right",
                  margin: int = 24, alpha: float = 1.0,
                  on_move: Optional[Callable[[int, int], None]] = None,
                  point: Optional[tuple[int, int]] = None) -> None:
@@ -123,7 +123,7 @@ class Overlay:
         rail.pack(side="left", fill="y")
         rail.pack_propagate(False)
 
-        body = tk.Frame(shell, bg=INK, padx=16, pady=13)
+        body = tk.Frame(shell, bg=INK, padx=16, pady=12)
         body.pack(side="left", fill="both", expand=True)
 
         # No pack_propagate here: the window already fixes the width, and
@@ -134,9 +134,6 @@ class Overlay:
         title = tk.Label(head, text="READY", bg=INK, fg=GO, font=DISPLAY,
                          anchor="w")
         title.pack(side="left")
-        count = tk.Label(head, text="", bg=INK, fg=FAINT, font=UTILITY,
-                         anchor="e")
-        count.pack(side="right", pady=(4, 0))
 
         activity = tk.Label(body, text="", bg=INK, fg=DIM, anchor="w",
                             justify="left", font=BODY,
@@ -155,7 +152,7 @@ class Overlay:
                         wraplength=WIDTH - RAIL - 32)
         keys.pack(fill="x")
 
-        self._widgets = {"rail": rail, "title": title, "count": count,
+        self._widgets = {"rail": rail, "title": title,
                          "activity": activity, "settings": settings,
                          "keys": keys}
 
@@ -167,10 +164,11 @@ class Overlay:
         self._place(root)
         self._set_click_through(True)
 
-        for widget in (root, shell, body):
-            widget.bind("<Button-1>", self._grab)
-            widget.bind("<B1-Motion>", self._drag_to)
-            widget.bind("<ButtonRelease-1>", self._drop)
+        # Every descendant, not just the frames: the labels cover almost the
+        # whole panel, and Tk delivers a click to the innermost widget under
+        # the pointer without passing it up to the parent - so binding the
+        # frames alone meant the panel could never actually be picked up.
+        self._bind_drag(root)
 
     # -- placement ---------------------------------------------------------
 
@@ -222,6 +220,13 @@ class Overlay:
 
     # -- dragging ----------------------------------------------------------
 
+    def _bind_drag(self, widget: tk.Misc) -> None:
+        widget.bind("<Button-1>", self._grab)
+        widget.bind("<B1-Motion>", self._drag_to)
+        widget.bind("<ButtonRelease-1>", self._drop)
+        for child in widget.winfo_children():
+            self._bind_drag(child)
+
     def _grab(self, event: "tk.Event") -> None:
         if self._movable:
             self._drag = (event.x_root - self.root.winfo_x(),
@@ -240,17 +245,24 @@ class Overlay:
     # -- what the panel says -----------------------------------------------
 
     def _headline(self) -> tuple[str, str]:
-        """States what is true now, not merely what is switched on."""
+        """States what is true now, not merely what is switched on.
+
+        The colour is the whole point of the rail, so it has to mean one thing:
+        red nothing is happening, amber something is expected of you or of the
+        game, green working.
+        """
         s = self.state
         if self._movable:
             return "MOVE", WORK
         if not s.running:
-            return "STOPPED", HOLD
+            return "STOPPED", STOP
         if s.choice and not s.auto_answer:
-            return "WAITING", YOU
-        if s.game_focused and s.dialogue:
-            return "SKIPPING", GO
-        return "READY", GO
+            return "YOUR TURN", WORK
+        if not s.game_running:
+            return "NO GAME", HOLD
+        if not s.game_focused:
+            return "NO FOCUS", HOLD
+        return ("SKIPPING", GO) if s.dialogue else ("READY", GO)
 
     def _activity(self) -> tuple[str, str]:
         """One sentence for the situation, most urgent case first."""
@@ -258,25 +270,29 @@ class Overlay:
         if self._movable:
             return "Drag the panel where you want it", WORK
         if s.note:
-            return s.note, YOU
+            return s.note, STOP
         if not s.running:
             return "Press F8 to start", DIM
         if not s.game_running:
-            return "Genshin is not running", DIM
+            return "Start Genshin and it will pick up", DIM
         if not s.game_focused:
-            return (f"Paused — {_shorten(s.foreground)} has focus"
-                    if s.foreground else "Paused — Genshin is not in front"), DIM
+            return (f"Waiting — {_shorten(s.foreground)} has focus"
+                    if s.foreground else "Waiting for Genshin to be in front"), DIM
         if s.choice and not s.auto_answer:
-            return "Your answer — waiting for you", YOU
+            return "Pick an answer — it is yours to make", WORK
         if s.dialogue:
             return "Skipping dialogue", TEXT
         return "Watching for dialogue", DIM
 
     def _settings_line(self) -> str:
-        """Short enough to stay on one line - a wrapped settings row reads as
-        a layout accident rather than as information."""
+        """Two settings, two lines, labels aligned.
+
+        Side by side they read as one run-on phrase; stacked and padded to the
+        same width they read as a small table, which is what they are.
+        """
         anchor = ANCHOR_LABELS.get(self.state.anchor, self.state.anchor)
-        return f"{anchor}  ·  answers {'auto' if self.state.auto_answer else 'manual'}"
+        answers = "auto" if self.state.auto_answer else "manual"
+        return f"mode      {anchor}\nanswers   {answers}"
 
     def _keys_line(self) -> str:
         first = "F8 stop" if self.state.running else "F8 start"
@@ -307,11 +323,6 @@ class Overlay:
         title, colour = self._headline()
         self._widgets["title"].config(text=title, fg=colour)
         self._widgets["rail"].config(bg=colour)
-
-        active = s.running and s.game_focused and s.dialogue
-        self._widgets["count"].config(
-            text=f"{s.presses} · {s.rate:.1f}/s" if active
-            else f"{s.presses}" if s.presses else "")
 
         text, tone = self._activity()
         self._widgets["activity"].config(text=text, fg=tone)

@@ -1,6 +1,6 @@
 """Freeze the app into a Windows executable dropped in the repository root.
 
-    build.bat              single GenshinAutoSkip.exe in the root
+    build.bat              single GenshinAutoSkipHUD.exe in the root
     build.bat --onedir     exe plus a runtime folder; starts noticeably faster
 
 There is no "just make an exe" shortcut that skips the Python package: an
@@ -22,7 +22,7 @@ SRC = Path(__file__).resolve().parent
 ROOT = SRC.parent
 WORK = ROOT / "build"
 ICON = SRC / "genshin_autoskip" / "resources" / "icon.ico"
-NAME = "GenshinAutoSkip"
+NAME = "GenshinAutoSkipHUD"
 
 # Pulled in dynamically by pystray/PIL/pynput, so PyInstaller cannot see them.
 HIDDEN_IMPORTS = [

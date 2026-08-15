@@ -19,7 +19,7 @@ without getting in the way. `F11` hides it.
 
 ## Quick start
 
-Download `GenshinAutoSkip.exe` from [Releases](../../releases) and run it. It
+Download `GenshinAutoSkipHUD.exe` from [Releases](../../releases) and run it. It
 asks for administrator rights on launch — see [Why administrator](#why-administrator).
 
 Windows will probably warn you first. The executable is not code-signed, so
@@ -33,7 +33,7 @@ the source is here to build yourself.
 Or build it yourself:
 
 ```
-build.bat            # puts GenshinAutoSkip.exe in this folder
+build.bat            # puts GenshinAutoSkipHUD.exe in this folder
 build.bat --onedir   # exe plus a runtime\ folder; starts faster
 ```
 
@@ -51,38 +51,46 @@ To run from source instead, `run.bat`.
 
 `F10` is the one worth remembering. Leave answering on to blast through filler,
 and press it the moment a conversation you care about starts: the skipper keeps
-advancing lines but stops at each choice and hands it back to you. The HUD turns
-that row red and reads `YOUR ANSWER - waiting`, so a deliberate stop is never
-mistaken for a broken tool.
+advancing lines but stops at each choice and reads `YOUR TURN`, so a deliberate
+stop is never mistaken for a broken tool.
 
-The tray icon mirrors the state — green when armed, amber when paused, grey when
-the game is not running — and its menu covers the same actions plus the
-interaction key and four speed presets, from `Fast` at 40–70 ms to `Slow` at
-400–600 ms, which is slow enough to read along with. Every change is written to `.env` and takes
-effect immediately; nothing needs a restart.
+The panel's left edge carries the state as a colour: green working, amber
+waiting on the game or on focus, blue your move, red not running. Drag it
+anywhere with **Move HUD** in the tray, and it stays where you put it.
+
+The tray menu covers the same actions plus the interaction key and four speed
+presets, from `Fast` at 40–70 ms to `Slow` at 400–600 ms, which is slow enough
+to read along with. Every change takes effect immediately; nothing needs a
+restart.
 
 ## Settings
 
-`.env`, next to the executable. Editable by hand or from the tray.
+Everything is set from the tray menu and remembered immediately — there is
+nothing to edit and no configuration file to keep track of. Settings live under
+`HKEY_CURRENT_USER\Software\GenshinAutoSkip`, so they need no administrator
+rights and survive replacing the executable.
 
-| Key | Default | Meaning |
+| Setting | Default | Meaning |
 | --- | --- | --- |
-| `CONFIRM_BUTTON` | `f` | In-game interaction key |
-| `DETECTION_ANCHOR` | `auto` | What to key on: `auto`, `marker` or `both` |
-| `AUTO_ANSWER` | `1` | Pick dialogue choices too, rather than waiting for you |
-| `PRESS_MIN_MS` | `60` | Lower bound of the randomised press interval |
-| `PRESS_MAX_MS` | `110` | Upper bound |
-| `KEY_HOLD_MS` | `60` | How long the key stays down |
-| `IDLE_POLL_MS` | `100` | How often to look at the screen when nothing is happening |
-| `DETECTION_HOLD_MS` | `0` | Keep pressing this long after detection stops |
-| `HUD` | `1` | Show the on-screen status panel |
-| `HUD_POSITION` | `bottom-left` | `top-left`, `top-right`, `bottom-right` |
-| `SPAM_MODE` | `0` | Press on a timer, ignoring detection |
-| `RANDOM_BREAKS` | `0` | Occasional 3–8 s idle pauses |
-| `PROFILE` | `0` | Write `loop_profile.csv` for diagnosing press rate |
+| `confirm_button` | `f` | In-game interaction key |
+| `detection_anchor` | `auto` | What to key on: `auto`, `marker` or `both` |
+| `auto_answer` | on | Pick dialogue choices too, rather than waiting for you |
+| `press_min_ms` / `press_max_ms` | `60` / `110` | Bounds of the randomised press interval |
+| `key_hold_ms` | `60` | How long the key stays down |
+| `idle_poll_ms` | `100` | How often to look at the screen when nothing is happening |
+| `detection_hold_ms` | `0` | Keep pressing this long after detection stops |
+| `hud` | on | Show the on-screen panel |
+| `hud_position` | `top-right` | Corner it starts in: `top-right`, `bottom-left`, `bottom-right` |
+| `hud_x` / `hud_y` | unset | Where the panel was dragged to |
+| `hud_opacity` | `1.0` | Lower it if you want the game to show through |
+| `spam_mode` | off | Press on a timer, ignoring detection |
+| `random_breaks` | off | Occasional 3–8 s idle pauses |
+| `profile` | off | Write `loop_profile.csv` for diagnosing press rate |
 
-`KEY_HOLD_MS` is the one to leave alone: the game samples input once per frame,
+`key_hold_ms` is the one to leave alone: the game samples input once per frame,
 and a shorter hold risks falling between two samples.
+
+To leave nothing behind, delete that registry key — the program writes no files.
 
 ## How it works
 
@@ -163,10 +171,9 @@ measured last time.
 ## Layout
 
 ```
-GenshinAutoSkip.exe       the built application
+GenshinAutoSkipHUD.exe    the built application
 run.bat                   run from source instead
 build.bat                 rebuild the executable
-.env                      settings
 
 src/
     main.py               entry point for the frozen build

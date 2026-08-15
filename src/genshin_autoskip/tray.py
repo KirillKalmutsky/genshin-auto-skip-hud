@@ -49,11 +49,6 @@ class Tray:
         if self.state.hud_movable:
             self.state.hud_visible = True
 
-    def _reset_position(self) -> None:
-        self.config.hud_x = self.config.hud_y = -1.0
-        self.state.hud_movable = False
-        self._persist()
-        self.state.note = "restart to return the panel to its corner"
 
     def _toggle_auto_answer(self) -> None:
         self.config.auto_answer = not self.config.auto_answer
@@ -149,9 +144,8 @@ class Tray:
                  checked=lambda _: self.config.auto_answer),
             item("Show HUD  (F11)", lambda: self._toggle_hud(),
                  checked=lambda _: self.state.hud_visible),
-            item("Move HUD", lambda: self._toggle_movable(),
+            item("Move HUD  (drag it)", lambda: self._toggle_movable(),
                  checked=lambda _: self.state.hud_movable),
-            item("Reset HUD position", lambda: self._reset_position()),
             item("Spam mode (ignore detection)", lambda: self._toggle_spam(),
                  checked=lambda _: self.config.spam_mode),
             pystray.Menu.SEPARATOR,

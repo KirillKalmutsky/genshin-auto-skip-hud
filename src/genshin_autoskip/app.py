@@ -17,7 +17,7 @@ from typing import Union
 from pynput.keyboard import Key, KeyCode, Listener  # type: ignore[import-untyped]
 
 from . import __version__
-from .config import CONFIG_PATH, Config
+from .config import CONFIG_LOCATION, Config
 from .detection import ANCHORS
 from .loop import skip_loop
 from .state import SkipperState
@@ -152,7 +152,7 @@ def main(state: SkipperState | None = None,
 def cli() -> int:
     """Console entry point; prints what the windowed build shows in the HUD."""
     print(f"  Genshin dialogue auto-skip {__version__}")
-    print(f"  settings: {CONFIG_PATH}")
+    print(f"  settings: {CONFIG_LOCATION}")
     print("  [F8] start/stop  [F9] mode  [F10] answers  [F11] HUD  [F12] exit")
     if not is_elevated():
         print("  [WARN] not running as administrator - input will be ignored")
