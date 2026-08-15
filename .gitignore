@@ -1,0 +1,24 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# --- PyInstaller build artefacts ---
+build/
+dist/
+*.spec
+src/genshin_autoskip/resources/
+GenshinAutoSkip.exe
+
+# --- runtime output ---
+.env
+loop_profile.csv
+
+# --- editors / OS ---
+.idea/
+.vscode/
+Thumbs.db
+desktop.ini
