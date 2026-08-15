@@ -55,8 +55,13 @@ advancing lines but stops at each choice and reads `YOUR TURN`, so a deliberate
 stop is never mistaken for a broken tool.
 
 The panel's left edge carries the state as a colour: green working, amber
-waiting on the game or on focus, blue your move, red not running. Drag it
-anywhere with **Move HUD** in the tray, and it stays where you put it.
+waiting on the game or on focus, blue your move, red not running.
+
+To move it, grab the dotted handle in its top-right corner and drag; it stays
+where you leave it. The handle is the only part of the overlay the mouse can
+touch — everything else is click-through, so clicks meant for the game pass
+straight through the panel. One place not to put it: over the auto-play button
+in the top-left, which is the thing detection reads.
 
 The tray menu covers the same actions plus the interaction key and four speed
 presets, from `Fast` at 40–70 ms to `Slow` at 400–600 ms, which is slow enough

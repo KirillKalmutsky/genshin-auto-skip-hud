@@ -18,8 +18,13 @@ Two things learned by photographing it over real game frames:
 Built on tkinter so it needs no extra dependency. The window is click-through
 (``WS_EX_TRANSPARENT``) and non-activating (``WS_EX_NOACTIVATE``) so it never
 swallows a click meant for the game and never steals focus - which would pause
-the skipper, since it only acts while Genshin is in front. Click-through is
-lifted while the panel is being moved.
+the skipper, since it only acts while Genshin is in front.
+
+That click-through style is why the panel cannot simply be picked up with the
+mouse: Windows leaves the whole window out of hit-testing, so no handler inside
+it ever sees the click, however many widgets the binding covers. The drag handle
+is therefore a *second, tiny window* without that style, parked over the panel's
+top-right corner - the only part of the overlay that answers the mouse.
 
 Placement note: the panel is captured by the screen grab like anything else, so
 it must not sit on a region detection reads; `config.HUD_POSITIONS` excludes the
@@ -41,6 +46,7 @@ WS_EX_TRANSPARENT = 0x00000020
 WS_EX_NOACTIVATE = 0x08000000
 WS_EX_TOOLWINDOW = 0x00000080
 SPI_GETWORKAREA = 0x0030
+GA_ROOT = 2
 
 #: Deep desaturated navy rather than black: black reads as a hole punched in
 #: the game, this reads as an instrument sitting on top of it.
@@ -57,6 +63,30 @@ STOP = "#ff5c7a"    # not running at all
 
 WIDTH = 330
 RAIL = 4
+#: Lines reserved for the status sentence, so the panel keeps one height.
+ACTIVITY_LINES = 2
+
+#: The drag handle: small enough to be hard to hit by accident over the game,
+#: big enough to grab without aiming.
+GRIP_W, GRIP_H = 26, 22
+GRIP_INSET = 5
+
+
+def grip_origin(x: int, y: int, width: int = WIDTH) -> tuple[int, int]:
+    """Where the handle sits given the panel's top-left corner."""
+    return x + width - GRIP_W - GRIP_INSET, y + GRIP_INSET
+
+
+def clamp(area: tuple[int, int, int, int], x: int, y: int,
+          w: int, h: int) -> tuple[int, int]:
+    """Keep a `w`x`h` window inside `area`.
+
+    Applied while dragging as well as on restore, so a position that was
+    reachable with the mouse is always a position the panel comes back to.
+    """
+    left, top, right, bottom = area
+    return (int(min(max(x, left), max(right - w, left))),
+            int(min(max(y, top), max(bottom - h, top))))
 
 #: Condensed and geometric - narrow enough to keep the panel small, and not the
 #: interface font every other Windows tool defaults to.
@@ -97,11 +127,14 @@ class Overlay:
         self.on_move = on_move
         self.point = point
         self.root: tk.Tk | None = None
+        self._grip: tk.Toplevel | None = None
+        self._dots: list[int] = []
+        self._canvas: tk.Canvas | None = None
         self._widgets: dict[str, tk.Widget] = {}
         self._visible = True
-        self._movable = False
         self._height = 0
         self._drag: tuple[int, int] | None = None
+        self._moved_to: tuple[int, int] | None = None
 
     # -- construction ------------------------------------------------------
 
@@ -135,8 +168,12 @@ class Overlay:
                          anchor="w")
         title.pack(side="left")
 
-        activity = tk.Label(body, text="", bg=INK, fg=DIM, anchor="w",
-                            justify="left", font=BODY,
+        # Two lines' worth of room, always. The sentence is sometimes one line
+        # and sometimes two, and letting the panel resize around it moved
+        # everything below - so the hotkeys never sat still. Reserving the
+        # space at the top keeps the whole panel a fixed height.
+        activity = tk.Label(body, text="", bg=INK, fg=DIM, anchor="nw",
+                            justify="left", font=BODY, height=ACTIVITY_LINES,
                             wraplength=WIDTH - RAIL - 32)
         activity.pack(fill="x", pady=(6, 0))
 
@@ -162,13 +199,66 @@ class Overlay:
         root.update_idletasks()
         self._height = root.winfo_height()
         self._place(root)
-        self._set_click_through(True)
+        self._apply_style(root, click_through=True)
+        self._build_grip(root)
 
-        # Every descendant, not just the frames: the labels cover almost the
-        # whole panel, and Tk delivers a click to the innermost widget under
-        # the pointer without passing it up to the parent - so binding the
-        # frames alone meant the panel could never actually be picked up.
-        self._bind_drag(root)
+    def _build_grip(self, root: tk.Tk) -> None:
+        """The one part of the overlay that answers the mouse.
+
+        Six dots in two columns - the shape every window manager and list
+        editor uses for "pick this up", so it needs no label to be understood.
+        """
+        grip = tk.Toplevel(root)
+        self._grip = grip
+        grip.overrideredirect(True)
+        grip.attributes("-topmost", True)
+        grip.attributes("-alpha", self.alpha)
+        grip.configure(bg=INK)
+
+        canvas = tk.Canvas(grip, width=GRIP_W, height=GRIP_H, bg=INK,
+                           highlightthickness=0, cursor="fleur")
+        canvas.pack()
+        self._canvas = canvas
+        # Squares rather than circles: at three pixels across, an oval is drawn
+        # as a plus sign, which reads as a cluster of little crosses.
+        for col in range(2):
+            for row in range(3):
+                x = GRIP_W // 2 - 4 + col * 6
+                y = GRIP_H // 2 - 7 + row * 6
+                self._dots.append(canvas.create_rectangle(
+                    x, y, x + 2, y + 2, fill=FAINT, outline=""))
+
+        canvas.bind("<Enter>", lambda _e: self._tint(TEXT))
+        canvas.bind("<Leave>", lambda _e: self._tint(FAINT))
+        canvas.bind("<Button-1>", self._grab)
+        canvas.bind("<B1-Motion>", self._drag_to)
+        canvas.bind("<ButtonRelease-1>", self._drop)
+
+        # Layered and non-activating like the panel, but deliberately *not*
+        # click-through - that is the whole point of it.
+        self._apply_style(grip, click_through=False)
+        self._place_grip()
+        grip.lift()
+
+    def _tint(self, colour: str) -> None:
+        if self._canvas is not None:
+            for dot in self._dots:
+                self._canvas.itemconfig(dot, fill=colour)
+
+    def _place_grip(self, at: tuple[int, int] | None = None) -> None:
+        """Park the handle on the panel's top-right corner.
+
+        `at` is the panel position the caller just asked for. It has to be
+        passed in rather than read back: `geometry()` only queues the move, so
+        immediately afterwards the panel still reports where it used to be -
+        which left the handle behind at its starting corner during a drag.
+        """
+        root, grip = self.root, self._grip
+        if root is None or grip is None:
+            return
+        px, py = at if at is not None else (root.winfo_x(), root.winfo_y())
+        x, y = grip_origin(px, py)
+        grip.geometry(f"{GRIP_W}x{GRIP_H}+{x}+{y}")
 
     # -- placement ---------------------------------------------------------
 
@@ -190,8 +280,8 @@ class Overlay:
         if self.point is not None:
             # A position the user dragged to, clamped so it cannot be lost off
             # screen if the display arrangement changes.
-            x = min(max(self.point[0], left), right - w)
-            y = min(max(self.point[1], top), bottom - h)
+            x, y = clamp((left, top, right, bottom),
+                         int(self.point[0]), int(self.point[1]), w, h)
         else:
             m = self.margin
             x, y = {
@@ -200,11 +290,10 @@ class Overlay:
                 "bottom-left": (left + m, bottom - h - m),
             }.get(self.position, (left + m, bottom - h - m))
         root.geometry(f"{w}x{h}+{int(x)}+{int(y)}")
+        self._place_grip((int(x), int(y)))
 
-    def _set_click_through(self, through: bool) -> None:
-        root = self.root
-        if root is None:
-            return
+    @staticmethod
+    def _apply_style(window: tk.Misc, click_through: bool) -> None:
         user32 = ctypes.windll.user32
         user32.GetWindowLongPtrW.restype = ctypes.c_longlong
         user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
@@ -212,34 +301,47 @@ class Overlay:
         user32.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int,
                                              ctypes.c_longlong]
 
-        hwnd = user32.GetParent(root.winfo_id()) or root.winfo_id()
+        # GA_ROOT rather than GetParent: Tk wraps its windows, so the id it
+        # hands out is a child of the real frame - but a Toplevel is *owned* by
+        # the main window, and GetParent would climb to that and restyle the
+        # panel instead of the handle. GA_ROOT stops at the top-level window.
+        hwnd = user32.GetAncestor(window.winfo_id(), GA_ROOT) or window.winfo_id()
         style = user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE)
-        style |= WS_EX_LAYERED | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
-        style = style | WS_EX_TRANSPARENT if through else style & ~WS_EX_TRANSPARENT
+        style |= WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
+        if click_through:
+            style |= WS_EX_LAYERED | WS_EX_TRANSPARENT
+        else:
+            # No WS_EX_LAYERED here. Setting it without also setting the layer's
+            # attributes leaves the window composited from nothing - it stops
+            # being drawn entirely, which is exactly how the handle first came
+            # out invisible. Tk adds the style itself when opacity is below 1,
+            # and configures it properly when it does.
+            style &= ~WS_EX_TRANSPARENT
         user32.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style)
 
     # -- dragging ----------------------------------------------------------
 
-    def _bind_drag(self, widget: tk.Misc) -> None:
-        widget.bind("<Button-1>", self._grab)
-        widget.bind("<B1-Motion>", self._drag_to)
-        widget.bind("<ButtonRelease-1>", self._drop)
-        for child in widget.winfo_children():
-            self._bind_drag(child)
-
     def _grab(self, event: "tk.Event") -> None:
-        if self._movable:
-            self._drag = (event.x_root - self.root.winfo_x(),
-                          event.y_root - self.root.winfo_y())
+        """Remember where inside the panel the handle was taken hold of."""
+        self._drag = (event.x_root - self.root.winfo_x(),
+                      event.y_root - self.root.winfo_y())
 
     def _drag_to(self, event: "tk.Event") -> None:
-        if self._movable and self._drag:
-            self.root.geometry(f"+{event.x_root - self._drag[0]}"
-                               f"+{event.y_root - self._drag[1]}")
+        root = self.root
+        if root is None or self._drag is None:
+            return
+        x, y = clamp(self._work_area(root),
+                     event.x_root - self._drag[0], event.y_root - self._drag[1],
+                     WIDTH, self._height)
+        root.geometry(f"+{x}+{y}")
+        self._place_grip((x, y))
+        self._moved_to = (x, y)
 
     def _drop(self, _event: "tk.Event") -> None:
-        if self._movable and self._drag and self.on_move:
-            self.on_move(self.root.winfo_x(), self.root.winfo_y())
+        """Remember where it was let go - the same coordinates that were asked
+        for, not what the window reports before the move has been processed."""
+        if self._drag is not None and self._moved_to and self.on_move:
+            self.on_move(*self._moved_to)
         self._drag = None
 
     # -- what the panel says -----------------------------------------------
@@ -252,8 +354,6 @@ class Overlay:
         game, green working.
         """
         s = self.state
-        if self._movable:
-            return "MOVE", WORK
         if not s.running:
             return "STOPPED", STOP
         if s.choice and not s.auto_answer:
@@ -267,8 +367,6 @@ class Overlay:
     def _activity(self) -> tuple[str, str]:
         """One sentence for the situation, most urgent case first."""
         s = self.state
-        if self._movable:
-            return "Drag the panel where you want it", WORK
         if s.note:
             return s.note, STOP
         if not s.running:
@@ -316,13 +414,17 @@ class Overlay:
             root.quit()
             return
 
-        if s.hud_movable != self._movable:
-            self._movable = s.hud_movable
-            self._set_click_through(not self._movable)
-
         if s.hud_visible != self._visible:
             self._visible = s.hud_visible
-            root.deiconify() if s.hud_visible else root.withdraw()
+            # The handle is its own window, so it has to be hidden with the
+            # panel - otherwise F11 leaves six dots floating over the game.
+            for window in (root, self._grip):
+                if window is None:
+                    continue
+                window.deiconify() if s.hud_visible else window.withdraw()
+            if s.hud_visible and self._grip is not None:
+                self._place_grip()
+                self._grip.lift()
 
         title, colour = self._headline()
         self._widgets["title"].config(text=title, fg=colour)
@@ -333,8 +435,9 @@ class Overlay:
         self._widgets["settings"].config(text=self._settings_line())
         self._widgets["keys"].config(text=self._keys_line())
 
-        # Wrapped text can change the height; keep the panel anchored to its
-        # corner rather than letting it grow off the edge.
+        # The height is fixed by the reserved lines above, so this should never
+        # fire - it is here so an unexpected change re-anchors the panel to its
+        # corner instead of letting it grow off the screen edge.
         root.update_idletasks()
         wanted = root.winfo_reqheight()
         if wanted != self._height:
