@@ -1,7 +1,14 @@
 # Genshin Auto-Skip HUD
 
+[![build](https://github.com/KirillKalmutsky/genshin-auto-skip-hud/actions/workflows/build.yml/badge.svg)](https://github.com/KirillKalmutsky/genshin-auto-skip-hud/actions/workflows/build.yml)
+
 Advances Genshin Impact dialogue for you. Runs in the system tray with an
 optional click-through HUD showing what it is doing.
+
+![The HUD](docs/hud.png)
+
+The panel is click-through and never takes focus, so it sits over the game
+without getting in the way. `F11` hides it.
 
 > Using third-party software with Genshin Impact violates its Terms of Service.
 > This tool never touches the game process — it reads pixels from the screen and
@@ -14,6 +21,14 @@ optional click-through HUD showing what it is doing.
 
 Download `GenshinAutoSkip.exe` from [Releases](../../releases) and run it. It
 asks for administrator rights on launch — see [Why administrator](#why-administrator).
+
+Windows will probably warn you first. The executable is not code-signed, so
+SmartScreen shows *"Windows protected your PC"* — click **More info → Run
+anyway**. Some antivirus engines also flag PyInstaller executables that
+synthesise keystrokes and request administrator rights; that combination is
+exactly what this tool does, so the warning is not surprising. Each release
+lists the SHA-256 of its binary if you want to check what you downloaded, and
+the source is here to build yourself.
 
 Or build it yourself:
 

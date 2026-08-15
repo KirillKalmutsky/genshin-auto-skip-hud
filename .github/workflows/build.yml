@@ -1,0 +1,62 @@
+name: build
+
+# Builds the executable from source in CI, so a downloaded binary can be traced
+# to the commit it came from rather than trusting whoever uploaded it.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Run tests
+        run: uv run --no-sync python -m pytest -q
+
+      - name: Build the executable
+        run: uv run --no-sync python src/build.py
+
+      - name: Record the artifact's hash
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash GenshinAutoSkip.exe -Algorithm SHA256).Hash.ToLower()
+          $size = (Get-Item GenshinAutoSkip.exe).Length
+          "GenshinAutoSkip.exe" | Out-File sha256.txt -Encoding utf8
+          "sha256: $hash"       | Out-File sha256.txt -Encoding utf8 -Append
+          "size:   $size bytes" | Out-File sha256.txt -Encoding utf8 -Append
+          "commit: $env:GITHUB_SHA" | Out-File sha256.txt -Encoding utf8 -Append
+          Get-Content sha256.txt
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: GenshinAutoSkip
+          path: |
+            GenshinAutoSkip.exe
+            sha256.txt
+          retention-days: 30
+
+      - name: Attach it to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload ${{ github.ref_name }} GenshinAutoSkip.exe sha256.txt --clobber
