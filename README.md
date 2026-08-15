@@ -76,7 +76,7 @@ effect immediately; nothing needs a restart.
 | `IDLE_POLL_MS` | `100` | How often to look at the screen when nothing is happening |
 | `DETECTION_HOLD_MS` | `0` | Keep pressing this long after detection stops |
 | `HUD` | `1` | Show the on-screen status panel |
-| `HUD_POSITION` | `top-right` | `top-left`, `bottom-left`, `bottom-right` |
+| `HUD_POSITION` | `bottom-left` | `top-left`, `top-right`, `bottom-right` |
 | `SPAM_MODE` | `0` | Press on a timer, ignoring detection |
 | `RANDOM_BREAKS` | `0` | Occasional 3–8 s idle pauses |
 | `PROFILE` | `0` | Write `loop_profile.csv` for diagnosing press rate |

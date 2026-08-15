@@ -23,6 +23,13 @@ CONFIG_PATH = app_dir() / ".env"
 
 _BOOL_TRUE = {"1", "true", "yes", "on"}
 
+#: Corners the HUD may occupy. Top-left is deliberately absent: the panel is
+#: captured by the screen grab like anything else, and in that corner it covers
+#: the auto-play button the detector reads - measured at 2560x1440, a
+#: top-left HUD lands on (28,28)-(396,273) against a button region at
+#: (56,26)-(160,130).
+HUD_POSITIONS = ("bottom-left", "bottom-right", "top-right")
+
 
 @dataclass
 class Config:
@@ -47,7 +54,10 @@ class Config:
     #: choice and waits for you, instead of picking for you.
     auto_answer: bool = True
     hud: bool = True
-    hud_position: str = "top-right"
+    #: Bottom-left by default: it is the one corner the game leaves empty
+    #: during a dialogue, and it is clear of both regions detection reads -
+    #: the auto-play button top-left and the marker at bottom centre.
+    hud_position: str = "bottom-left"
     #: Press on a timer regardless of detection - a fallback for when a game
     #: update moves the UI and detection needs re-measuring.
     spam_mode: bool = False
@@ -108,6 +118,9 @@ class Config:
 
         anchor = config.detection_anchor.strip().lower()
         config.detection_anchor = anchor if anchor in ANCHORS else "auto"
+
+        corner = config.hud_position.strip().lower()
+        config.hud_position = corner if corner in HUD_POSITIONS else "bottom-left"
         return config
 
     def save(self, path: Path = CONFIG_PATH) -> None:
