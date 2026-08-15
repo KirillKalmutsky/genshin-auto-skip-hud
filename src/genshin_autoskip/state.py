@@ -33,3 +33,5 @@ class SkipperState:
     note: str = ""
     should_exit: bool = False
     hud_visible: bool = True
+    #: While true the panel stops being click-through so it can be dragged.
+    hud_movable: bool = False

@@ -126,7 +126,16 @@ def main(state: SkipperState | None = None,
     try:
         if config.hud:
             from .hud import Overlay  # imported late: tkinter is heavy
-            Overlay(state, position=config.hud_position).run()
+
+            def remember(x: int, y: int) -> None:
+                config.hud_x, config.hud_y = float(x), float(y)
+                _persist(config)
+
+            point = ((int(config.hud_x), int(config.hud_y))
+                     if config.hud_x >= 0 and config.hud_y >= 0 else None)
+            Overlay(state, position=config.hud_position, point=point,
+                    alpha=min(max(config.hud_opacity, 0.3), 1.0),
+                    on_move=remember).run()
         else:
             while not state.should_exit:
                 sleep(0.2)

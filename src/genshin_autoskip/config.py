@@ -58,6 +58,16 @@ class Config:
     #: during a dialogue, and it is clear of both regions detection reads -
     #: the auto-play button top-left and the marker at bottom centre.
     hud_position: str = "bottom-left"
+    #: Where the panel was dragged to, in screen pixels. Negative means "use
+    #: the corner above" - the corners stay meaningful for anyone who has never
+    #: moved it, and dragging quietly takes over once they have.
+    hud_x: float = -1.0
+    hud_y: float = -1.0
+    #: Opaque by default. Photographed over real game frames, even a little
+    #: transparency let scene detail through the panel and the secondary text
+    #: landed on top of it - a status panel that is sometimes unreadable is
+    #: worse than one that hides a little scenery. Lower it if you disagree.
+    hud_opacity: float = 1.0
     #: Press on a timer regardless of detection - a fallback for when a game
     #: update moves the UI and detection needs re-measuring.
     spam_mode: bool = False
