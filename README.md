@@ -54,8 +54,11 @@ and press it the moment a conversation you care about starts: the skipper keeps
 advancing lines but stops at each choice and reads `YOUR TURN`, so a deliberate
 stop is never mistaken for a broken tool.
 
-The panel's left edge carries the state as a colour: green working, amber
-waiting on the game or on focus, blue your move, red not running.
+The panel says one thing: what is happening right now, as a word and as a
+colour along its left edge — green working, amber waiting on the game or on
+focus, blue your move, red not running or something wrong. Warnings are states
+of their own: `NO ADMIN` when keystrokes are being discarded, `KEY FAILED` when
+Windows rejects them.
 
 To move it, grab the dotted handle in its top-right corner and drag; it stays
 where you leave it. The handle is the only part of the overlay the mouse can

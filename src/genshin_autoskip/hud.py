@@ -63,8 +63,6 @@ STOP = "#ff5c7a"    # not running at all
 
 WIDTH = 330
 RAIL = 4
-#: Lines reserved for the status sentence, so the panel keeps one height.
-ACTIVITY_LINES = 2
 
 #: The drag handle: small enough to be hard to hit by accident over the game,
 #: big enough to grab without aiming.
@@ -100,6 +98,30 @@ ANCHOR_LABELS = {
     "marker": "orange marker",
     "both": "either",
 }
+
+
+#: Notes the loop sets, turned into states of their own. A note explains a tool
+#: that looks like it is working and is not, so it has to reach the headline -
+#: it is the state, not a footnote to one.
+NOTE_STATES = (
+    ("not elevated", "NO ADMIN", "keys are ignored"),
+    ("input error", "KEY FAILED", ""),
+    ("break", "BREAK", ""),
+)
+
+
+def note_state(note: str) -> tuple[str, str, str] | None:
+    """Split a note into a headline, its detail, and nothing if it is routine.
+
+    The detail falls back to whatever the note says after its prefix, so an
+    unrecognised note still reaches the panel rather than being swallowed.
+    """
+    text = note.strip()
+    for prefix, word, detail in NOTE_STATES:
+        if text.lower().startswith(prefix):
+            tail = text[len(prefix):].lstrip(" -:")
+            return word, detail or tail, HOLD if word == "BREAK" else STOP
+    return ("PROBLEM", text, STOP) if text else None
 
 
 def _shorten(title: str, limit: int = 26) -> str:
@@ -168,19 +190,18 @@ class Overlay:
                          anchor="w")
         title.pack(side="left")
 
-        # Two lines' worth of room, always. The sentence is sometimes one line
-        # and sometimes two, and letting the panel resize around it moved
-        # everything below - so the hotkeys never sat still. Reserving the
-        # space at the top keeps the whole panel a fixed height.
-        activity = tk.Label(body, text="", bg=INK, fg=DIM, anchor="nw",
-                            justify="left", font=BODY, height=ACTIVITY_LINES,
-                            wraplength=WIDTH - RAIL - 32)
-        activity.pack(fill="x", pady=(6, 0))
+        # The one thing the state word cannot say on its own: *which* window
+        # took the focus. It rides alongside the headline rather than on a line
+        # of its own, which is what the panel used to spend a whole sentence on.
+        detail = tk.Label(head, text="", bg=INK, fg=DIM, font=UTILITY,
+                          anchor="e")
+        # Kept clear of the drag handle, which sits in this same corner.
+        detail.pack(side="right", pady=(6, 0), padx=(0, GRIP_W - GRIP_INSET))
 
         settings = tk.Label(body, text="", bg=INK, fg=FAINT, anchor="w",
                             justify="left", font=UTILITY,
                             wraplength=WIDTH - RAIL - 32)
-        settings.pack(fill="x", pady=(9, 0))
+        settings.pack(fill="x", pady=(10, 0))
 
         tk.Frame(body, bg=EDGE, height=1).pack(fill="x", pady=(10, 8))
 
@@ -189,9 +210,8 @@ class Overlay:
                         wraplength=WIDTH - RAIL - 32)
         keys.pack(fill="x")
 
-        self._widgets = {"rail": rail, "title": title,
-                         "activity": activity, "settings": settings,
-                         "keys": keys}
+        self._widgets = {"rail": rail, "title": title, "detail": detail,
+                         "settings": settings, "keys": keys}
 
         root.geometry(f"{WIDTH}x1")
         root.update_idletasks()
@@ -354,8 +374,13 @@ class Overlay:
         game, green working.
         """
         s = self.state
+        # Stopped first, so F8 always visibly does something. A warning would
+        # otherwise sit there permanently - "not elevated" is set once at
+        # startup and never clears - and swallow that feedback.
         if not s.running:
             return "STOPPED", STOP
+        if (warning := note_state(s.note)) is not None:
+            return warning[0], warning[2]
         if s.choice and not s.auto_answer:
             return "YOUR TURN", WORK
         if not s.game_running:
@@ -364,23 +389,22 @@ class Overlay:
             return "NO FOCUS", HOLD
         return ("SKIPPING", GO) if s.dialogue else ("READY", GO)
 
-    def _activity(self) -> tuple[str, str]:
-        """One sentence for the situation, most urgent case first."""
+    def _detail(self) -> tuple[str, str]:
+        """What the state word leaves out - nothing, most of the time.
+
+        The sentence that used to sit here restated the headline: "SKIPPING"
+        over "Skipping dialogue". Two cases carried something new, and only
+        those still say anything: which window stole the focus, and what a
+        warning is about.
+        """
         s = self.state
-        if s.note:
-            return s.note, STOP
-        if not s.running:
-            return "Press F8 to start", DIM
-        if not s.game_running:
-            return "Start Genshin and it will pick up", DIM
-        if not s.game_focused:
-            return (f"Waiting — {_shorten(s.foreground)} has focus"
-                    if s.foreground else "Waiting for Genshin to be in front"), DIM
-        if s.choice and not s.auto_answer:
-            return "Pick an answer — it is yours to make", WORK
-        if s.dialogue:
-            return "Skipping dialogue", TEXT
-        return "Watching for dialogue", DIM
+        if s.running and (warning := note_state(s.note)) is not None:
+            # Capped: an input error carries whatever Windows reported, and a
+            # long one would run past the panel rather than wrap.
+            return _shorten(warning[1], 22), warning[2]
+        if s.running and s.game_running and not s.game_focused and s.foreground:
+            return _shorten(s.foreground, 20), DIM
+        return "", DIM
 
     def _settings_line(self) -> str:
         """Two settings, two lines, labels aligned.
@@ -430,14 +454,14 @@ class Overlay:
         self._widgets["title"].config(text=title, fg=colour)
         self._widgets["rail"].config(bg=colour)
 
-        text, tone = self._activity()
-        self._widgets["activity"].config(text=text, fg=tone)
+        detail, tone = self._detail()
+        self._widgets["detail"].config(text=detail, fg=tone)
         self._widgets["settings"].config(text=self._settings_line())
         self._widgets["keys"].config(text=self._keys_line())
 
-        # The height is fixed by the reserved lines above, so this should never
-        # fire - it is here so an unexpected change re-anchors the panel to its
-        # corner instead of letting it grow off the screen edge.
+        # Every row is a fixed number of lines, so this should never fire - it
+        # is here so an unexpected change re-anchors the panel to its corner
+        # instead of letting it grow off the screen edge.
         root.update_idletasks()
         wanted = root.winfo_reqheight()
         if wanted != self._height:
