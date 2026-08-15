@@ -4,6 +4,7 @@ pystray runs its own Windows message pump, so it lives on a worker thread while
 tkinter keeps the main thread for the HUD.
 """
 import threading
+import webbrowser
 from time import sleep
 from typing import Callable, Optional
 
@@ -17,6 +18,8 @@ from .state import SkipperState
 #: Offered in the tray menu. The full scan-code table is large and most of it
 #: makes no sense as an interaction key.
 KEY_CHOICES = ["f", "e", "r", "t", "space", "enter"]
+
+PROJECT_URL = "https://github.com/KirillKalmutsky/genshin-auto-skip-hud"
 
 
 class Tray:
@@ -75,6 +78,13 @@ class Tray:
             pass  # a read-only install directory must not crash the app
         self.on_config_change()
 
+    @staticmethod
+    def _open_project() -> None:
+        # In a thread: the tray's menu handler runs on the pump that keeps the
+        # icon alive, and launching a browser can block for a second or two.
+        threading.Thread(target=webbrowser.open, args=(PROJECT_URL,),
+                         daemon=True, name="open-project").start()
+
     def _quit(self) -> None:
         self.state.should_exit = True
         if self._icon is not None:
@@ -131,6 +141,7 @@ class Tray:
             pystray.Menu.SEPARATOR,
             item(lambda _: self._status_line(), None, enabled=False),
             pystray.Menu.SEPARATOR,
+            item("Project page on GitHub", lambda: self._open_project()),
             item("Exit  (F12)", lambda: self._quit()),
         )
 
