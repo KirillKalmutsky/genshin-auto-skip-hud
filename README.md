@@ -144,8 +144,10 @@ elevates through `run.bat`.
   Every comparable tool gates on focus for the same reason.
 - **Cinematic cutscenes are not handled.** They draw neither the auto-play
   button nor option bubbles. Pressing the key there does nothing anyway.
-- **Borderless or windowed, not exclusive fullscreen** — exclusive fullscreen
-  breaks screen capture.
+- **Exclusive fullscreen does not work — use borderless or windowed.** Verified
+  in the game: exclusive fullscreen bypasses the desktop compositor, so a screen
+  grab returns nothing to look at. Supporting it would mean hooking the game's
+  own rendering from inside its process, which this tool does not do.
 - **Windows only.**
 
 ## Diagnostics
