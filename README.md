@@ -166,45 +166,6 @@ elevates through `run.bat`.
   own rendering from inside its process, which this tool does not do.
 - **Windows only.**
 
-## Diagnostics
-
-Set `PROFILE=1` to log every loop iteration to `loop_profile.csv`: phase, how
-long detection took, the confidence, and the gap since the previous press. That
-is the fastest way to tell a detection problem from a timing one.
-
-If a game update ever breaks input entirely, the thing to re-measure is which
-injection method the game still accepts — see the table above for what was
-measured last time.
-
-## Layout
-
-```
-GenshinAutoSkipHUD.exe    the built application
-run.bat                   run from source instead
-build.bat                 rebuild the executable
-
-src/
-    main.py               entry point for the frozen build
-    build.py              PyInstaller packaging
-    genshin_autoskip/
-        app.py            wiring: threads, hotkeys, lifecycle
-        loop.py           detection loop and press scheduling
-        detection.py      shape recovery and matching
-        templates.py      the two reference shapes, embedded
-        input_backend.py  SendInput scan-code keyboard
-        hud.py            click-through on-screen panel
-        tray.py           tray icon and menu
-        window.py         foreground and geometry queries
-        config.py         .env settings
-        icons.py          runtime-generated icons
-
-tests/                    pytest suite
-```
-
-There is no way to "just build an exe" without the Python package: an executable
-*is* this code bundled together with an interpreter, and PyInstaller is what does
-the bundling. Both ship together so the source stays readable.
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
